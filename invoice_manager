@@ -1,0 +1,24 @@
+from database import FirebaseDatabase
+
+class InvoiceManager:
+    def __init__(self, database: FirebaseDatabase):
+        self.database = database
+
+    def get_invoices_data(self, customer_id) -> list:
+        invoices_ref = self.database.db.collection('users').document(customer_id).collection('invoices').get()
+
+        invoices_data = []
+        for invoice in invoices_ref:
+            invoice_data = invoice.to_dict()
+            invoices_data.append(invoice_data)
+
+        return invoices_data
+    
+    def calculate_invoice_total(self) -> float:
+        total = 0
+
+        
+
+        # for line_item in self.data.get('line_items', []):
+        #     total += line_item.get('price', 0) * line_item.get('quantity', 0)
+        return total
