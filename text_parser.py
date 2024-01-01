@@ -1,4 +1,4 @@
-from pyparsing import Combine, Keyword, Word, nums, alphas, alphanums, Group, OneOrMore, Suppress
+from pyparsing import Combine, Keyword, Word, nums, alphas, alphanums, Group, OneOrMore, Suppress, Optional
 
 at_symbol = Suppress('@')
 hash_symbol = Suppress('#')
@@ -6,7 +6,7 @@ dollar_symbol = Suppress('$')
 insert_symbol = hash_symbol
 delete_symbol = Suppress("-")
 modify_symbol = Suppress(">")
-description_pattern = Combine(OneOrMore(Word(alphanums + " ")))("description")
+description_pattern = Word(alphanums + " ")("description")
 amount_pattern = dollar_symbol + Word(nums + "." + nums)("amount")
 quantity_pattern = Word(nums)("quantity")
 line_number_pattern = Word(nums)("line_number")
@@ -15,17 +15,24 @@ def parse_text_message(text_message):
     customer_name = None
     line_items = []
     name_parser = at_symbol + Word(alphas + " ")
-    item_parser = hash_symbol + Group(Word(alphanums + " ") + dollar_symbol + Word(nums + "." + nums) + Word(nums))
-    
+
+    item_parser = hash_symbol + Group(description_pattern + amount_pattern + Optional(quantity_pattern))
     parser = OneOrMore(name_parser | item_parser)
 
-    result = parser.parseString(text_message)
-
+    try:
+        result = parser.parseString(text_message)
+    except Exception as e:
+        print("Error parsing text message: ", e)
+        return None, None
+    
     for item in result:
         if isinstance(item, str):
             customer_name = item.strip()
         else:
-            description, price, quantity = item
+            description = item['description']
+            price = item['amount']
+            quantity = item.get("quantity", 1)
+
             line_items.append({
                 'description': description,
                 'price': price,
