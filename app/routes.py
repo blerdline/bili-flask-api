@@ -18,7 +18,7 @@ test = {}
 test['basic'] = {
     "to": '+18318511377', # Test Twilio Number
     "from": '+15125551212', # Test Customer
-    "body": "@Just Me\n#Try one repair $50 1\n#Get three at half off $25 3"
+    "body": "@Friendly Sky\n#Flight 827 $50 1\n#Pan Am $10 3"
 }
 test['delete'] = {
     "to": '+18318511377', # Test Twilio Number
@@ -45,7 +45,6 @@ test['invoice'] = {
 bp = Blueprint('routes', __name__)
 @bp.route('/')
 def index():
-    print('In index')
     return jsonify({'message': 'Welcome to your Flask API!'})
 
 @bp.route('/invoice_test', methods=['POST', 'GET'])
@@ -53,7 +52,6 @@ def invoice_test():
     test_message = test['invoice']
     body = test_message['body']
     response = parse_invoice_number_text(body)
-    print(response)
     return jsonify(response)
 
 @bp.route('/modify_invoice_items', methods=['POST', 'PUT'])
@@ -61,7 +59,6 @@ def modify_invoice_items():
     test_message = test['edit']
     body = test_message['body']
     response = parse_modify_line_item_text(body)
-    print(response)
     return jsonify(response)
 
 @bp.route('/delete_invoice_items', methods=['POST', 'DELETE'])
@@ -69,7 +66,6 @@ def delete_invoice_items():
     test_message = test['delete']
     body = test_message['body']
     response = parse_delete_line_item_text(body)
-    print(response)
     return jsonify(response)
 
 @bp.route('/insert_invoice_items', methods=['POST', 'PUT'])
@@ -77,75 +73,21 @@ def insert_invoice_items():
     test_message = test['add']
     body = test_message['body']
     response = parse_insert_line_item_text(body)
-    print(response)
     return jsonify(response)
 
-     
+@users_bp.route('/<user_id>/invoice', methods=['DELETE'])
+def delete_mistaken_invoices(user_id):
+
+    customer = Customer(user_id)
+    customer.delete_invoices()
+    return {'message': 'Invoices deleted for user ' + user_id }
+
 @bp.route('/sms', methods=['POST', 'GET'])
 def sms():
 
     from_number = request.form['From']
     to_number = request.form['To']
-    # test_message = {
-    #     "to": '+18318511377', # Test Twilio Number
-    #     "from": '+15125551212', # Test Customer
-    #     "body": "@Just Me\n#Try one repair $50.00 1\n#Get three at half off $25.00 3"
-    # }
-
-    # test_message_1 = {
-    #     "to": '+18318511377', # Test Twilio Number
-    #     "from": '+15125551212', # Test Customer
-    #     "body": "Invoice 1"
-    # }
-
-    # test_message_2 = {
-    #     "to": '+18318511377', # Test Twilio Number
-    #     "from": '+15125551212', # Test Customer
-    #     "body": "Edit Invoice 1"
-    # }
-
-    # test_message_3 = {
-    #     "to": '+18318511377', # Test Twilio Number
-    #     "from": '+15125551212', # Test Customer
-    #     "body": "Help"
-    # }
-
-    # test_message_4 = {
-    #     "to": '+18318511377', # Test Twilio Number
-    #     "from": '+15125551212', # Test Customer
-    #     "body": "English"
-    # }
-
-    # test_message_5 = {
-    #     "to": '+18318511377', # Test Twilio Number
-    #     "from": '+15125551212', # Test Customer
-    #     "body": "Español"
-    # }
-
-
-    # I want to dispatch to the right function based on the message body using a dispatch pattern
-    # message_body = {
-    #     '@': add_customer,
-    #     '#': get_invoice,
-    #     'edit': edit_invoice,
-    #     'invoice': get_invoice,
-    #     'help': get_help_text,
-    #     'english': set_language,
-    #     'español': set_language
-    # }
-
-
-    # I want to route to the right function based on the message using a dictionary
-    # message_type = {
-    #     'welcome': get_welcome_text,
-    #     'language_confirmation': get_language_confirmation,
-    #     'invoice': get_invoice,
-    #     'edit_invoice': edit_invoice,
-    #     'help': get_help_text
-    # }
-
-    # message_type['welcome']()
-
+    # body = request.form['Body']
 
     # If the message is from the Test Customer and that Customer is not in the database or the language is not set, send the welcome message
     if not Customer(from_number).get_customer_data() or not Customer(from_number).get_customer_data().get('langPref'):
@@ -153,20 +95,13 @@ def sms():
         welcome_message = get_welcome_text()
         print(welcome_message)
         welm_text = welcome_message['text']
-        # twilio_client.messages.create(
-        #     to=from_number,
-        #     from_=to_number,
-        #     body=welm_text
-        # )
         return welm_text
-    
 
     if 'Body' in request.form:
         data = request.form['Body']
     else:
         data = request.data.decode('utf-8')
 
-    print(data)
     user_id = request.form['From']
 
     #if free trial is over, send a message to upgrade
@@ -184,7 +119,6 @@ def sms():
     # we need to check the customer exist
     # we need to check if the customer has multiple invoices
 
-
     return str(response)
 
 @bp.route('/language_confirmation', methods=['POST'])
@@ -201,11 +135,9 @@ def set_language():
     
 
     response_text = customer.update_language(user_id, data)
-    print(response_text)
     response = MessagingResponse()
     response.message(response_text)
     return str(response)
-
 
 @users_bp.route('/<user_id>', methods=['GET'])
 def get_user_data(user_id):
@@ -228,6 +160,54 @@ def get_user_invoices(user_id):
         return customer_invoice
     else:
         return {'error': 'Customer Invoice could not be found'}
+
+@users_bp.route('/<user_id>/invoice', methods=['POST'])
+def create_user_invoice(user_id):
+    
+    if 'Body' in request.form:
+        data = request.form['Body']
+    else:
+        data = request.data.decode('utf-8')
+
+    customer_name, line_items = parse_text_message(data)
+    customer = Customer(user_id)
+
+    #Does customer exist
+    if not customer.get_customer_data():
+        return {'error': 'Customer does not exist'}
+
+    if not customer.can_customer_create_invoice():
+        return {'error': 'Customer cannot create invoice'}
+    
+     
+    customer_invoice = customer.add_invoice(customer_name, line_items)
+
+    if customer_invoice:
+        return customer_invoice
+    else:
+        return {'error': 'Customer Invoice could not be created'}
+
+    # return {'message': line_items}
+    
+@users_bp.route('/<user_id>/invoice/<invoice_id>', methods=['GET'])
+def get_user_invoice(user_id, invoice_id):
+    customer = Customer(user_id)
+    customer_invoice = customer.get_single_invoice(invoice_id)
+
+    if customer_invoice:
+        return customer_invoice
+    else:
+        return {'error': 'Customer Invoice could not be found'}
+    
+@users_bp.route('/<user_id>/invoice/<invoice_id>/line_items', methods=['GET'])
+def get_user_invoice_line_items(user_id, invoice_id):
+    customer = Customer(user_id)
+    customer_invoice_line_items = customer.get_invoice_line_items(invoice_id)
+
+    if customer_invoice_line_items:
+        return customer_invoice_line_items
+    else:
+        return {'error': 'Customer Invoice Line Items could not be found'}
     
 @users_bp.route('/<user_id>/free-trial-expiration', methods=['GET'])
 def get_free_trial_expiration(user_id):
@@ -259,9 +239,9 @@ def get_free_trial_expiration(user_id):
     
 @users_bp.route('/<user_id>/subscription-confirmation', methods=['GET'])
 def get_subscription_confirmation(user_id):
-
-
-    pass
+    customer = Customer(user_id)
+    customer_subscription = customer.get_customer_data()
+    return customer_subscription['subscribed']
 
 
 '''
@@ -296,9 +276,6 @@ To edit an invoice, reply with “Edit Invoice” and the invoice number you wan
 If you need help with something else email us at dev@bilibiz.com.
 
 '''
-@bp.route('/language-confirmation', methods=['POST'])
-def get_language_confirmation():
-    pass
 
 '''
 
