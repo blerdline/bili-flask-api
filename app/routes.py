@@ -76,7 +76,7 @@ def insert_invoice_items():
     return jsonify(response)
 
 @users_bp.route('/<user_id>/invoice', methods=['DELETE'])
-def delete_mistaken_invoices(user_id):
+def delete_mistaken_invoices(user_id, invoice_id):
 
     customer = Customer(user_id)
     customer.delete_invoices()
@@ -85,40 +85,43 @@ def delete_mistaken_invoices(user_id):
 @bp.route('/sms', methods=['POST', 'GET'])
 def sms():
 
-    from_number = request.form['From']
-    to_number = request.form['To']
-    # body = request.form['Body']
+    if (request.method == 'POST' and request.form):
+        from_number = request.form['From']
+        to_number = request.form['To']
+        # body = request.form['Body']
 
-    # If the message is from the Test Customer and that Customer is not in the database or the language is not set, send the welcome message
-    if not Customer(from_number).get_customer_data() or not Customer(from_number).get_customer_data().get('langPref'):
-        # Send the welcome message
-        welcome_message = get_welcome_text()
-        print(welcome_message)
-        welm_text = welcome_message['text']
-        return welm_text
+        # If the message is from the Test Customer and that Customer is not in the database or the language is not set, send the welcome message
+        if not Customer(from_number).get_customer_data() or not Customer(from_number).get_customer_data().get('langPref'):
+            # Send the welcome message
+            welcome_message = get_welcome_text()
+            print(welcome_message)
+            welm_text = welcome_message['text']
+            return welm_text
 
-    if 'Body' in request.form:
-        data = request.form['Body']
+        if 'Body' in request.form:
+            data = request.form['Body']
+        else:
+            data = request.data.decode('utf-8')
+
+        user_id = request.form['From']
+
+        #if free trial is over, send a message to upgrade
+        trial_message = get_free_trial_expiration(user_id)
+        if trial_message['free_trial_expired']:
+            return trial_message['message']
+
+        customer_name, line_items = parse_text_message(data)
+
+        customer = Customer(user_id)
+        response_text = customer.add_customer(user_id)
+        print(response_text)
+        response = MessagingResponse()
+        # response.message(response_text)
+        # we need to check the customer exist
+        # we need to check if the customer has multiple invoices
     else:
-        data = request.data.decode('utf-8')
-
-    user_id = request.form['From']
-
-    #if free trial is over, send a message to upgrade
-    trial_message = get_free_trial_expiration(user_id)
-    if trial_message['free_trial_expired']:
-        return trial_message['message']
-
-    customer_name, line_items = parse_text_message(data)
-
-    customer = Customer(user_id)
-    response_text = customer.add_customer(user_id)
-    print(response_text)
-    response = MessagingResponse()
-    # response.message(response_text)
-    # we need to check the customer exist
-    # we need to check if the customer has multiple invoices
-
+        response = MessagingResponse()
+        response.message("this is an SMS endpoint")
     return str(response)
 
 @bp.route('/language_confirmation', methods=['POST'])
@@ -141,6 +144,7 @@ def set_language():
 
 @users_bp.route('/<user_id>', methods=['GET'])
 def get_user_data(user_id):
+    print('fetching user data')
     data = firebase.get_collection_data('users',user_id)
     if data:
         return {'data': data}
@@ -154,6 +158,7 @@ def get_user_statement(user_id):
 @users_bp.route('/<user_id>/invoice', methods=['GET'])
 def get_user_invoices(user_id):
     customer = Customer(user_id)
+    print(f'User ID: {user_id}')
     customer_invoice = customer.get_invoices()
 
     if customer_invoice:
