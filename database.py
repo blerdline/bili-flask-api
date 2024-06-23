@@ -3,11 +3,7 @@ from abc import ABC, abstractmethod
 class Database(ABC):
 
     @abstractmethod
-    def get_collection_data(self, customer_id) -> list:
-        pass
-
-    @abstractmethod
-    def get_collection_data(self, collection, uid) -> dict or None:
+    def get_collection_data(self, path:str) -> dict or None:
         pass
 
     @abstractmethod

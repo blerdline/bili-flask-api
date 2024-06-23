@@ -27,22 +27,81 @@ class FirebaseDatabase(Database):
         self.db = firestore.client()
         logging.info('Firebase connection initialized..')
 
-    def get_collection_data(self, collection, uid):
-        doc_ref = self.db.collection(collection).document(uid)
+    def get_collection_data(self, path: str):
+        # Split the path into individual components
+        path_components = path.split('/')
+
+        path_collection = self.db.collection(path)
+        docs = path_collection.stream()
+        print(f'Docs: {docs}')
+        print(f'Path: {path}')
+
+        # Initialize the reference to the root collection
+        collection_ref = self.db.collection(path_components[0])
+
+        # Iterate through the path components starting from the second one
+        for component in path_components[1:]:
+            # Get the document reference for the current component
+            doc_ref = collection_ref.document(component)
+
+            # Get the document snapshot
+            doc = doc_ref.get()
+
+            print(f'Doc: {doc.to_dict()}')
+
+            # Check if the document exists
+            if doc.exists:
+                # Update the collection reference to point to the specified sub-collection
+                collection_ref = doc_ref.collection(path_components[-2])  # Use the second-to-last component as sub-collection ID
+            else:
+                # If the document doesn't exist, return None
+                return None
+
+        # Now the collection reference points to the desired sub-collection
+        # Get the document reference for the final document
+        doc_ref = collection_ref.document(path_components[-1])  # Use the last component as document ID
+
+        # Get the document snapshot
         doc = doc_ref.get()
+
+        # Check if the document exists
         if doc.exists:
-            data = doc.to_dict()
-            return data
+            # Convert the document snapshot to a dictionary and return the data
+            return doc.to_dict()
         else:
+            # If the document doesn't exist, return None
             return None
         
-    def get_collection_reference(self, collection, uid):
-        doc_ref = self.db.collection(collection).document(uid)
-        doc = doc_ref.get()
-        if doc.exists:
-            return doc_ref
-        else:
-            return None
+    def get_collection_reference(self, path):
+
+        print(f'Path: {path}')
+        # Split the path into individual components
+        path_components = path.split('/')
+
+        # Initialize the reference to the root collection
+        collection_ref = self.db.collection(path_components[0])
+
+        # Iterate through the path components starting from the second one
+        for component in path_components[1:]:
+            # Get the document reference for the current component
+            doc_ref = collection_ref.document(component)
+
+            print(f'Document: {doc_ref.get()}')
+            # Get the document snapshot
+            doc = doc_ref.get()
+
+            print(f'Doc: {doc.to_dict()}')
+
+            # Check if the document exists
+            if doc.exists:
+                # Update the collection reference to point to the specified sub-collection
+                collection_ref = doc_ref.collection(path_components[-1])  # Use the last component as sub-collection ID
+            else:
+                # If the document doesn't exist, return None
+                return None
+
+        # Return the final collection reference
+        return collection_ref
         
     def get_user_invoice_ref(self, user_id):
         return self.db.collection('users').document(user_id).collection('invoices')

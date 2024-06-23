@@ -1,5 +1,7 @@
 import firebase_admin
 from firebase_admin import firestore
+from flask import json
+from app.customencoder.customencoder import CustomEncoder
 from firebase import firebase
 from datetime import datetime
 
@@ -13,11 +15,21 @@ class Customer:
         self.customer_id = customer_id
         self.language_service = LanguageService(self.database)
 
+    def __iter__(self):
+        yield {'customer_id', self.customer_id}
+
+    
+    def __str__(self):
+        return json.dumps(self, ensure_ascii=False, cls=CustomEncoder)
+    
+    def __repr__(self):
+        return self.__str__()
+
     def update_language(self, language):
         return self.language_service.update_language(self.customer_id, language)
 
     def get_customer_data(self) -> dict or None:
-        return self.database.get_collection_data('users', self.customer_id)
+        return self.database.get_collection_data(f'users/{self.customer_id}')
 
         
     def can_customer_create_invoice(self) -> bool:
@@ -61,9 +73,11 @@ class Customer:
         
     def get_invoices(self) -> list:
         invoices = []
-        invoices_ref = self.database.get_collection_reference(f'users/{self.customer_id}/invoices')
+        # invoices_ref = self.database.get_collection_reference(f'users/{self.customer_id}/invoices')
         #invoices_ref = self.db.collection('users').document(self.customer_id).collection('invoices').get()
-        print(self.count_invoices())
+        invoices_ref = self.database.get_user_invoice_ref(self.customer_id).get()
+        if (self.count_invoices() == 0):
+            return []
         for invoice in invoices_ref:
             invoice_data = invoice.to_dict()
             invoice_data['id'] = invoice.id  # Add invoice ID to the data dictionary
@@ -75,11 +89,28 @@ class Customer:
 
         return invoices
     
+    def get_single_invoice(self, invoice_id):
+        invoice = self.database.get_collection_reference(f'users/{self.customer_id}/invoices', invoice_id)
+        invoice_data = invoice.to_dict()
+        invoice_data['id'] = invoice.id
+        line_items = self.get_invoice_line_items(invoice.id)
+        invoice_data['line_items'] = line_items
+        total = self.calculate_invoice_total(line_items)
+        invoice_data['calculated_total'] = total
+        return invoice_data
+    
     def count_invoices(self):
         invoices = []
-        customer_ref = self.database.get_collection_reference('users', self.customer_id)
+        print(f'What is Self.customer_id: {self.customer_id}')
+
+        customer_ref = self.database.get_collection_reference(f'users/{self.customer_id}')
+        customer_invoice_data = self.database.get_collection_data(f'users/{self.customer_id}/invoices')
+        print(f'What is customer_invoice_data: {customer_invoice_data}')
+        if not customer_ref:
+            return 0
         invoices_ref = customer_ref.collection('invoices').get()
-        
+        if not invoices_ref:
+            return 0
         return len(invoices_ref)
     
     def get_single_invoice(self, invoice_id):
@@ -107,3 +138,10 @@ class Customer:
             document.reference.delete()
 
         return f'Invoices deleted'
+    
+    def return_customer_id(self):
+        return self.customer_id
+    
+    def get_customer_object(self):
+        return self
+    
